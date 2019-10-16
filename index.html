@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0,viewport-fit=cover">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>JS SourceMap Inspector</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.17.1/themes/prism.min.css" rel="stylesheet" />
+  <link rel="shortcut icon" href="./favicon.png" type="image/png">
+
+  <style>
+    html, body {
+      height: 100%;
+      font-family: sans-serif;
+      background-color: black;
+      color: white;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #drop_file {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 2rem 3rem;
+    }
+    #output {
+      display: none;
+    }
+    :not(pre)>code[class*=language-], pre[class*=language-] {
+      background: black;
+    }
+    .language-css .token.string, .style .token.string, .token.entity, .token.operator, .token.url {
+      background: none;
+    }
+    input[type="number"] {
+      border: none;
+      outline: none;
+      color: white;
+      background: black;
+      padding: 6px 10px;
+      font-size: 1rem;
+      border-bottom: 2px solid white;
+    }
+    label {
+      margin: 0 12px;
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+    code[class*=language-], pre[class*=language-] {
+      white-space: pre-wrap;
+      text-shadow: none;
+    }
+  </style>
+</head>
+<body>
+  <main style="display:flex;flex-direction: column;">
+  <div id="drop_file">
+    <img src="./javascript.png" alt="JavaScript" style="width: 4rem; height: 4rem;" />
+    <h1>Drop file here</h1>
+      <code style="color: gainsboro;">
+        // Accepts: sourcemap JavaScript file!
+      </code>
+  </div>
+  <output id="output">
+    <div style="display:flex;justify-content: center;">
+      <label>
+        line:
+        <input id="line" name="line" type="number" min="1" value="118" autofocus />
+      </label>
+      <label>
+        column:
+        <input id="column" name="column" type="number" min="1" value="657" />
+      </label>
+    </div>
+  </output>
+  <pre>
+    <code class="lang-json" id="output_code">
+    </code>
+  </pre>
+  </main>
+</body>
+<script src="https://unpkg.com/source-map@0.7.3/dist/source-map.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.17.1/components/prism-core.js" data-manual></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.17.1/plugins/autoloader/prism-autoloader.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.17.1/plugins/normalize-whitespace/prism-normalize-whitespace.min.js"></script>
+<script>
+    sourceMap.SourceMapConsumer.initialize({
+        "lib/mappings.wasm": "https://unpkg.com/source-map@0.7.3/lib/mappings.wasm"
+    });
+
+    let lineInput = document.getElementById('line'), columnInput = document.getElementById('column');
+    let lineNumber = lineInput.value;
+    let columnNumber = columnInput.value;
+    let smc;
+    let fileResult;
+
+    lineInput.addEventListener('change', handleInputChange);
+    columnInput.addEventListener('change', handleInputChange);
+
+    function handleInputChange(event) {
+      getSourceFromSourcemap(lineInput.value, columnInput.value);
+    }
+
+    let output_code = document.getElementById("output_code");
+
+    function getSourceFromSourcemap(lineNumber, columnNumber) {
+      output_code.innerHTML = JSON.stringify(smc.originalPositionFor({
+        line: Number(lineNumber),
+        column: Number(columnNumber)
+      }), null , 4);
+      Prism.highlightAll();
+    }
+
+    function handleFileSelect(event) {
+      event.stopPropagation();
+      event.preventDefault();
+      let files = event.dataTransfer.files;
+      let output = [];
+      let file;
+      for (var i = 0, f; f = files[i]; i++) {
+        if (!f.type.match('text/javascript')) {
+          continue;
+        }
+        output.push(`<li>${!f.type.match('text/javascript') ? '🔴' : '✅'}<strong>`, escape(f.name), '</strong> (', f.type || 'n/a', ') - ',
+                f.size, ' bytes, last modified: ',
+                f.lastModifiedDate ? f.lastModifiedDate.toLocaleDateString() : 'n/a',
+                '</li>');
+        file = f;
+      }
+      let ul = document.createElement('ul')
+      ul.innerHTML = output.join('');
+      document.getElementById('output').prepend(ul);
+      if (file) {
+        let fileReader = new FileReader
+        fileReader.onload = (function(f) {
+          return async function(event) {
+            fileResult = fileReader.result;
+            smc = await new sourceMap.SourceMapConsumer(fileReader.result);
+            getSourceFromSourcemap(lineNumber, columnNumber);
+            document.getElementById("output").style.display = 'block';
+            setTimeout(() => document.getElementById('line').focus(), 500);
+          };
+        })(file)
+        fileReader.readAsText(file);
+      }
+    }
+
+    function handleDragOver(event) {
+      event.stopPropagation();
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy'
+    }
+
+    let body = document.body;
+    body.addEventListener('dragover', handleDragOver, false);
+    body.addEventListener('drop', handleFileSelect, false);
+</script>
+</html>
